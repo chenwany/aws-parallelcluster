@@ -22,6 +22,7 @@ from pcluster.dcv.utils import get_supported_dcv_os, get_supported_dcv_partition
 from pcluster.utils import (
     ellipsize,
     get_base_additional_iam_policies,
+    get_ebs_snapshot_info,
     get_efs_mount_target_id,
     get_file_section_name,
     get_instance_vcpus,
@@ -783,19 +784,6 @@ def s3_bucket_validator(param_key, param_value, pcluster_config):
     return errors, warnings
 
 
-def ec2_ebs_snapshot_validator(param_key, param_value, pcluster_config):
-    errors = []
-    warnings = []
-    try:
-        test = boto3.client("ec2").describe_snapshots(SnapshotIds=[param_value]).get("Snapshots")[0]
-        if test.get("State") != "completed":
-            warnings.append("Snapshot {0} is in state '{1}' not 'completed'".format(param_value, test.get("State")))
-    except ClientError as e:
-        errors.append(e.response.get("Error").get("Message"))
-
-    return errors, warnings
-
-
 def ebs_settings_validator(param_key, param_value, pcluster_config):
     """
     Validate the following cases.
@@ -1328,6 +1316,36 @@ def ebs_volume_iops_validator(section_key, section_label, pcluster_config):
             errors.append(
                 "IOPS to volume size ratio of {0} is too high; maximum is {1}.".format(
                     float(volume_iops) / float(volume_size), volume_type_to_iops_ratio[volume_type]
+                )
+            )
+
+    return errors, warnings
+
+
+def ebs_volume_size_snapshot_validator(section_key, section_label, pcluster_config):
+    """
+    Validate the following cases.
+
+    The EBS snapshot is in "completed" state if it is specified
+    If user specified the volume size, the volume must be larger than then volume size of the EBS snapshot
+    """
+    errors = []
+    warnings = []
+
+    section = pcluster_config.get_section(section_key, section_label)
+    if section.get_param_value("ebs_snapshot_id"):
+        ebs_snapshot_id = section.get_param_value("ebs_snapshot_id")
+        snapshot_response_dict = get_ebs_snapshot_info(ebs_snapshot_id)
+        # validate that the input volume size is larger than the volume size of the EBS snapshot
+        snapshot_volume_size = snapshot_response_dict.get("VolumeSize")
+        volume_size = section.get_param_value("volume_size")
+        if volume_size < snapshot_volume_size:
+            errors.append("The EBS volume size must not be smaller than the volume size of EBS snapshot.")
+        # validate that the state of ebs snapshot
+        if snapshot_response_dict.get("State") != "completed":
+            warnings.append(
+                "Snapshot {0} is in state '{1}' not 'completed'".format(
+                    ebs_snapshot_id, snapshot_response_dict.get("State")
                 )
             )
 

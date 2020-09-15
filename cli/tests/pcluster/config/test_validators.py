@@ -185,39 +185,6 @@ def test_ec2_ami_validator(mocker, boto3_stubber, image_architecture, bad_ami_me
     utils.assert_param_validator(mocker, config_parser_dict, expected_message)
 
 
-def test_ec2_ebs_snapshot_validator(mocker, boto3_stubber):
-    describe_snapshots_response = {
-        "Snapshots": [
-            {
-                "Description": "This is my snapshot",
-                "Encrypted": False,
-                "VolumeId": "vol-049df61146c4d7901",
-                "State": "completed",
-                "VolumeSize": 8,
-                "StartTime": "2014-02-28T21:28:32.000Z",
-                "Progress": "100%",
-                "OwnerId": "012345678910",
-                "SnapshotId": "snap-1234567890abcdef0",
-            }
-        ]
-    }
-    mocked_requests = [
-        MockedBoto3Request(
-            method="describe_snapshots",
-            response=describe_snapshots_response,
-            expected_params={"SnapshotIds": ["snap-1234567890abcdef0"]},
-        )
-    ]
-    boto3_stubber("ec2", mocked_requests)
-
-    # TODO test with invalid key
-    config_parser_dict = {
-        "cluster default": {"ebs_settings": "default"},
-        "ebs default": {"shared_dir": "test", "ebs_snapshot_id": "snap-1234567890abcdef0"},
-    }
-    utils.assert_param_validator(mocker, config_parser_dict)
-
-
 def test_ec2_volume_validator(mocker, boto3_stubber):
     describe_volumes_response = {
         "Volumes": [
@@ -2127,3 +2094,49 @@ def test_ebs_allowed_values_all_have_volume_size_bounds():
 def test_ebs_volume_iops_validator(mocker, section_dict, expected_message):
     config_parser_dict = {"cluster default": {"ebs_settings": "default"}, "ebs default": section_dict}
     utils.assert_param_validator(mocker, config_parser_dict, expected_message)
+
+
+@pytest.mark.parametrize(
+    "section_dict, snapshot_size, state, expected_warning, expected_error",
+    [
+        ({"volume_size": 100, "ebs_snapshot_id": "snap-1234567890abcdef0"}, 50, "completed", None, None),
+        (
+            {"volume_size": 100, "ebs_snapshot_id": "snap-1234567890abcdef0"},
+            50,
+            "incompleted",
+            "Snapshot snap-1234567890abcdef0 is in state 'incompleted' not 'completed'",
+            None,
+        ),
+        ({"ebs_snapshot_id": "snap-1234567890abcdef0"}, 50, "completed", None, None),
+        (
+            {"volume_size": 100, "ebs_snapshot_id": "snap-1234567891abcdef0"},
+            120,
+            "completed",
+            None,
+            "The EBS volume size must not be smaller than the volume size of EBS snapshot",
+        ),
+    ],
+)
+def test_ebs_volume_size_snapshot_validator(
+    section_dict, snapshot_size, state, mocker, boto3_stubber, expected_warning, expected_error, capsys
+):
+    ebs_snapshot_id = section_dict["ebs_snapshot_id"]
+
+    describe_snapshots_response = {
+        "Description": "This is my snapshot",
+        "Encrypted": False,
+        "VolumeId": "vol-049df61146c4d7901",
+        "State": state,
+        "VolumeSize": snapshot_size,
+        "StartTime": "2014-02-28T21:28:32.000Z",
+        "Progress": "100%",
+        "OwnerId": "012345678910",
+        "SnapshotId": ebs_snapshot_id,
+    }
+    mocker.patch("pcluster.config.cfn_param_types.get_ebs_snapshot_info", return_value=describe_snapshots_response)
+    mocker.patch("pcluster.config.validators.get_ebs_snapshot_info", return_value=describe_snapshots_response)
+
+    config_parser_dict = {"cluster default": {"ebs_settings": "default"}, "ebs default": section_dict}
+    utils.assert_param_validator(
+        mocker, config_parser_dict, expected_error=expected_error, capsys=capsys, expected_warning=expected_warning
+    )

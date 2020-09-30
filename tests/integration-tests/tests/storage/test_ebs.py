@@ -37,7 +37,8 @@ def test_ebs_single(scheduler, pcluster_config_reader, clusters_factory):
 
 
 # centos6 does not support GPT
-@pytest.mark.dimensions("ap-northeast-2", "c5.xlarge", "alinux2", "sge")
+# @pytest.mark.dimensions("ap-northeast-2", "c5.xlarge", "alinux2", "sge")
+@pytest.mark.dimensions("us-east-1", "c5.xlarge", "alinux2", "sge")
 @pytest.mark.dimensions("cn-northwest-1", "c4.xlarge", "ubuntu1804", "slurm")
 @pytest.mark.usefixtures("os", "instance")
 def test_ebs_snapshot(
@@ -45,7 +46,7 @@ def test_ebs_snapshot(
 ):
     logging.info("Testing ebs snapshot")
     mount_dir = "ebs_mount_dir"
-    volume_size = 10
+    volume_size = 30
 
     logging.info("Creating snapshot")
 
@@ -59,7 +60,7 @@ def test_ebs_snapshot(
 
     mount_dir = "/" + mount_dir
     scheduler_commands = get_scheduler_commands(scheduler, remote_command_executor)
-    _test_ebs_correctly_mounted(remote_command_executor, mount_dir, volume_size="9.8")
+    _test_ebs_correctly_mounted(remote_command_executor, mount_dir, volume_size="30")
     _test_ebs_correctly_shared(remote_command_executor, mount_dir, scheduler_commands)
 
     # Checks for test data

@@ -16,6 +16,7 @@ import time
 import boto3
 import configparser
 import pytest
+import utils
 from assertpy import assert_that
 from remote_command_executor import RemoteCommandExecutor
 
@@ -61,6 +62,9 @@ def test_update_sit(
     cluster.config_file = str(updated_config_file)
     cluster.update()
 
+    updated_config = configparser.ConfigParser()
+    updated_config.read(updated_config_file)
+    _check_volume(cluster, updated_config, region)
     # Get initial, new and old compute instances references, to be able to execute specific tests in different group of
     # instances
     # Get initial compute nodes
@@ -379,7 +383,10 @@ def _add_compute_nodes(scheduler_commands, slots_per_node, number_of_nodes=1):
 
 
 def _get_instance(region, stack_name, host, none_expected=False):
-    hostname = "{0}.{1}.compute.internal".format(host, region)
+    if region == "us-east-1":
+        hostname = "{0}.ec2.internal".format(host)
+    else:
+        hostname = "{0}.{1}.compute.internal".format(host, region)
     ec2_resource = boto3.resource("ec2", region_name=region)
     instance = next(
         iter(
@@ -488,6 +495,35 @@ def _check_role_attached_policy(region, cluster, policy_arn):
 
     policies = [p["PolicyArn"] for p in result["AttachedPolicies"]]
     assert policy_arn in policies
+
+
+def get_ebs_volume_ids(cluster, region):
+    # get the list of configured ebs volume ids
+    # example output: ['vol-000', 'vol-001', 'vol-002']
+    ebs_stack = utils.get_substacks(cluster.cfn_name, region=region, sub_stack_name="EBSCfnStack")[0]
+    return utils.retrieve_cfn_outputs(ebs_stack, region).get("Volumeids").split(",")
+
+
+def describe_volume(volume_id, region):
+    volume = boto3.client("ec2", region_name=region).describe_volumes(VolumeIds=[volume_id]).get("Volumes")[0]
+    volume_type = volume.get("VolumeType")
+    volume_iops = volume.get("Iops")
+    volume_throughput = volume.get("Throughput")
+    return volume_type, volume_iops, volume_throughput
+
+
+def _check_volume(cluster, config, region):
+    logging.info("checking volume throughout and iops change")
+    volume_ids = get_ebs_volume_ids(cluster, region)
+    volume_type = config.get("ebs custom", "volume_type")
+    volume = describe_volume(volume_ids[0], region)
+    assert_that(volume[0]).is_equal_to(volume_type)
+    if volume_type == "gp3":
+        volume_iops = config.get("ebs custom", "volume_iops")
+        volume_throughput = config.get("ebs custom", "volume_throughput")
+        assert_that(volume[1]).is_equal_to(int(volume_iops))
+        assert_that(volume[2]).is_equal_to(int(volume_throughput))
+        logging.info("check volume throughout and iops change successful")
 
 
 @pytest.mark.dimensions("eu-west-1", "c5.xlarge", "alinux2", "awsbatch")

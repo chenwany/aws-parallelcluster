@@ -31,7 +31,7 @@ from tests.common.schedulers_common import SlurmCommands, get_scheduler_commands
 from tests.common.utils import fetch_instance_slots
 
 
-@pytest.mark.dimensions("us-west-2", "c5.xlarge", "centos7", "sge")
+@pytest.mark.dimensions("us-east-1", "c5.xlarge", "centos7", "sge")
 @pytest.mark.usefixtures("os")
 def test_update_sit(
     region, scheduler, instance, pcluster_config_reader, clusters_factory, test_datadir, s3_bucket_factory
@@ -64,7 +64,7 @@ def test_update_sit(
 
     updated_config = configparser.ConfigParser()
     updated_config.read(updated_config_file)
-    _check_volume(cluster, updated_config, region)
+    # _check_volume(cluster, updated_config, region)
     # Get initial, new and old compute instances references, to be able to execute specific tests in different group of
     # instances
     # Get initial compute nodes

@@ -385,7 +385,7 @@ class Cluster:
             Cluster._load_additional_instance_type_data(cluster_config_dict)
             config = ClusterSchema().load(cluster_config_dict)
 
-            validation_failures = ClusterNameValidator().execute(name=self.name)
+            validation_failures = ClusterNameValidator().execute(name=self.name, config=cluster_config_dict)
             validation_failures += config.validate(validator_suppressors)
             for failure in validation_failures:
                 if failure.level.value >= FailureLevel(validation_failure_level).value:

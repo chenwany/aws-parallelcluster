@@ -819,7 +819,11 @@ def test_head_node_imds_validator(imds_secured, scheduler, expected_message):
 @pytest.mark.parametrize(
     "vpcs, is_private_zone, expected_message",
     [
-        (None, False, None),  # Public hosted zone
+        (
+            None,
+            False,
+            "Public Route53 hosted zone is not officially supported by Parallelcluster",
+        ),  # Public hosted zone
         (
             [{"VPCRegiion": "us-east-1", "VPCId": "vpc-123"}, {"VPCRegiion": "us-east-1", "VPCId": "vpc-456"}],
             True,

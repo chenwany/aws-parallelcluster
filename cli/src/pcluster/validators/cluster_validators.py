@@ -908,3 +908,9 @@ class DNSVPCValidator(Validator):
                     f"The VPCs associated with hosted zone are {vpc_ids}.",
                     FailureLevel.ERROR,
                 )
+        else:
+            self._add_failure(
+                "Public Route53 hosted zone is not officially supported by Parallelcluster, "
+                "If you already do customizations to support public hosted zone, please skip the validator.",
+                FailureLevel.ERROR,
+            )
